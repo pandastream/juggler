@@ -1,5 +1,3 @@
-require 'json'
-
 class Juggler
   # Stopping: This is rather complex. The point of the __STOP__ malarkey it to 
   # unblock a blocking reserve so that delete and release commands can be 
@@ -78,8 +76,8 @@ class Juggler
 
         begin
           begin
-            params = JSON.load(job.body)
-          rescue JSON::ParserError
+            params = MultiJson.decode(job.body)
+          rescue MultiJson::DecodeError
             params = Marshal.load(job.body)
           end
         rescue => e

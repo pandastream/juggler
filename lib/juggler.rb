@@ -1,7 +1,7 @@
 require 'em-jack'
 require 'eventmachine'
 require 'uri'
-require 'json'
+require 'multi_json'
 
 class Juggler
   class << self
@@ -35,7 +35,7 @@ class Juggler
     def throw(method, params, options = {})
       # TODO: Do some checking on the method
       connection.use(method.to_s)
-      connection.put(JSON.dump(params), options)
+      connection.put(MultiJson.encode(params), options)
     end
 
     # Strategy block: should return a deferrable object (so that juggler can 
