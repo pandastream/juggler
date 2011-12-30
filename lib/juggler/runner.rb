@@ -78,9 +78,9 @@ class Juggler
 
         begin
           begin
-            params = Marshal.load(job.body)
-          rescue TypeError
             params = JSON.load(job.body)
+          rescue JSON::ParserError
+            params = Marshal.load(job.body)
           end
         rescue => e
           handle_exception(e, "#{to_s}: Exception unmarshaling #{@queue} job")
