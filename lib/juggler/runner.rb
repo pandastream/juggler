@@ -1,3 +1,5 @@
+require 'json'
+
 class Juggler
   # Stopping: This is rather complex. The point of the __STOP__ malarkey it to 
   # unblock a blocking reserve so that delete and release commands can be 
@@ -75,7 +77,11 @@ class Juggler
         @reserved = false
 
         begin
-          params = Marshal.load(job.body)
+          begin
+            params = Marshal.load(job.body)
+          rescue TypeError
+            params = JSON.load(job.body)
+          end
         rescue => e
           handle_exception(e, "#{to_s}: Exception unmarshaling #{@queue} job")
           connection.delete(job)
