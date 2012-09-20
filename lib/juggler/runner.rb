@@ -75,13 +75,9 @@ class Juggler
         @reserved = false
 
         begin
-          begin
-            params = MultiJson.decode(job.body)
-            if params.kind_of?(Hash) && defined? ActiveSupport::HashWithIndifferentAccess
-              params = ActiveSupport::HashWithIndifferentAccess.new(params)
-            end
-          rescue MultiJson::DecodeError
-            params = Marshal.load(job.body)
+          params = MultiJson.decode(job.body)
+          if params.kind_of?(Hash) && defined? ActiveSupport::HashWithIndifferentAccess
+            params = ActiveSupport::HashWithIndifferentAccess.new(params)
           end
         rescue => e
           if job.body == '"__STOP__"'
