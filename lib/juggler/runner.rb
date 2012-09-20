@@ -84,9 +84,13 @@ class Juggler
             params = Marshal.load(job.body)
           end
         rescue => e
-          handle_exception(e, "#{to_s}: Exception unmarshaling #{@queue} job")
-          connection.delete(job)
-          next
+          if job.body == '"__STOP__"'
+            params = "__STOP__"
+          else
+            handle_exception(e, "#{to_s}: Exception unmarshaling #{@queue} job")
+            connection.delete(job)
+            next
+          end
         end
         
         if params == "__STOP__"
