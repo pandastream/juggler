@@ -13,6 +13,7 @@ class Juggler
     state :done
     
     attr_reader :job
+    attr_reader :params
     
     def initialize(job, params, strategy)
       @job = job
@@ -106,7 +107,7 @@ class Juggler
     def run_strategy
       begin
         sd = EM::DefaultDeferrable.new
-        @strategy.call(sd, @params)
+        @strategy.call(sd, @params, @stats)
         sd.callback {
           change_state(:succeeded)
         }
