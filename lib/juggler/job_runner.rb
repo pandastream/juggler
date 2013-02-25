@@ -23,6 +23,7 @@ class Juggler
         "#{to_s}: New job with body: #{params.inspect}"
       }
       @_state = :new
+      @last_exception = nil
     end
     
     def run
@@ -119,6 +120,8 @@ class Juggler
             # Do not schedule the job to be retried
             change_state(:failed)
           elsif e.kind_of?(Exception)
+            @last_exception = e
+
             # Handle exception and schedule for retry
             Juggler.exception_handler.call(e)
             change_state(:retried)
@@ -139,7 +142,7 @@ class Juggler
     end
 
     def backoff
-      Juggler.backoff_function.call(self, @stats)
+      Juggler.backoff_function.call(self, @stats, @last_exception)
     end
   end
 end
