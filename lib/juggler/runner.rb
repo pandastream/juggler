@@ -6,62 +6,22 @@ class Juggler
   # eventmachine is stopped
   # 
   class Runner
-    class << self
-      def start(runner)
-        @runners ||= []
-        @runners << runner
-        
-        @signals_setup ||= begin
-          %w{INT TERM}.each do |sig|
-            Signal.trap(sig) {
-              stop_all_runners_with_grace
-            }
-          end
-          true
-        end
-      end
-      
-      private
-      
-      def stop_all_runners_with_grace
-        # Trigger each runner to shut down
-        @runners.each { |r| r.stop }
-        
-        Juggler.logger.info {
-          "Giving processes #{Juggler.shutdown_grace_timeout}s grace period to exit"
-        }
-        
-        EM::PeriodicTimer.new(0.1) {
-          if !@runners.any? { |r| r.running? }
-            Juggler.logger.info "Exited cleanly"
-            EM.stop
-          end
-        }
-        
-        EM::Timer.new(Juggler.shutdown_grace_timeout) do
-          Juggler.logger.info {
-            "Force exited after #{Juggler.shutdown_grace_timeout}s with tasks running"
-          }
-          EM.stop
-        end
-      end
-    end
-
-    def initialize(method, concurrency, strategy)
+    def initialize(juggler, method, concurrency, strategy)
+      @juggler = juggler
       @strategy = strategy
       @concurrency = concurrency
       @queue = method.to_s
-      
+
       @running = []
       @reserved = false
     end
-    
+
     # We potentially need to issue a new reserve call after a job is reserved 
     # (if we're not at the concurrency limit), and after a job completes 
     # (unless we're already reserving)
     def reserve_if_necessary
       if @on && @connection.connected? && !@reserved && @running.size < @concurrency
-        Juggler.logger.debug "#{to_s}: Reserving"
+        @juggler.logger.debug "#{to_s}: Reserving"
         reserve
       end
     end
@@ -87,11 +47,11 @@ class Juggler
           next
         end
         
-        job_runner = JobRunner.new(job, params, @strategy)
+        job_runner = JobRunner.new(@juggler, job, params, @strategy)
         
         @running << job_runner
 
-        Juggler.logger.debug {
+        @juggler.logger.debug {
           "#{to_s}: Excecuting #{@running.size} jobs"
         }
 
@@ -116,15 +76,15 @@ class Juggler
           # This doesn't necessarily mean that a job has taken too long, it is 
           # quite likely that the blocking reserve is just stopping jobs from 
           # being deleted
-          Juggler.logger.debug "#{to_s}: Reserve terminated (deadline_soon)"
+          @juggler.logger.debug "#{to_s}: Reserve terminated (deadline_soon)"
 
           check_all_reserved_jobs.callback {
             reserve_if_necessary
           }
         elsif error == :disconnected
-          Juggler.logger.warn "#{to_s}: Reserve terminated (beanstalkd disconnected)"
+          @juggler.logger.warn "#{to_s}: Reserve terminated (beanstalkd disconnected)"
         else
-          Juggler.logger.error "#{to_s}: Unexpected error: #{error}"
+          @juggler.logger.error "#{to_s}: Unexpected error: #{error}"
           reserve_if_necessary
         end
       end
@@ -132,7 +92,7 @@ class Juggler
 
     def run
       @on = true
-      Runner.start(self)
+      @juggler.send(:add_runner, self)
       # Creates beanstalkd connection - reserve happens on connect
       connection
     end
@@ -142,7 +102,7 @@ class Juggler
 
       # See class documentation on stopping
       if @reserved
-        Juggler.throw(@queue, "__STOP__")
+        @juggler.throw(@queue, "__STOP__")
       end
     end
     
@@ -157,15 +117,15 @@ class Juggler
     private
 
     def handle_exception(e, message)
-      Juggler.logger.error "#{message}: #{e.message} (#{e.class})"
-      Juggler.logger.debug e.backtrace.join("\n")
+      @juggler.logger.error "#{message}: #{e.message} (#{e.class})"
+      @juggler.logger.debug e.backtrace.join("\n")
     end
 
     def connection
       @connection ||= begin
         c = EMJack::Connection.new({
-          :host => Juggler.server.host,
-          :port => Juggler.server.port,
+          :host => @juggler.server.host,
+          :port => @juggler.server.port,
         })
         c.on_connect {
           c.watch(@queue)

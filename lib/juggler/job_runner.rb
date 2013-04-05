@@ -14,16 +14,21 @@ class Juggler
     
     attr_reader :job
     
-    def initialize(job, params, strategy)
+    def initialize(juggler, job, params, strategy)
+      @juggler = juggler
       @job = job
       @params = params
       @strategy = strategy
-      Juggler.logger.debug {
+      logger.debug {
         "#{to_s}: New job with body: #{params.inspect}"
       }
       @_state = :new
     end
-    
+
+    def logger
+      @juggler.logger
+    end
+
     def run
       change_state(:running)
     end
@@ -31,7 +36,7 @@ class Juggler
     def check_for_timeout
       if state == :running
         if (time_left = @end_time - Time.now) < 1
-          Juggler.logger.info("#{to_s}: Timed out (#{time_left}s left)")
+          logger.info("#{to_s}: Timed out (#{time_left}s left)")
           change_state(:timed_out)
         end
       end
@@ -42,20 +47,20 @@ class Juggler
     end
     
     def release(delay = 0)
-      Juggler.logger.debug { "#{to_s}: releasing" }
+      logger.debug { "#{to_s}: releasing" }
       release_def = job.release(:delay => delay)
       release_def.callback {
-        Juggler.logger.info { "#{to_s}: released for retry in #{delay}s" }
+        logger.info { "#{to_s}: released for retry in #{delay}s" }
         change_state(:done)
       }
       release_def.errback {
-        Juggler.logger.error { "#{to_s}: release failed (could not release)" }
+        logger.error { "#{to_s}: release failed (could not release)" }
         change_state(:done)
       }
     end
 
     def bury
-      Juggler.logger.warn { "#{to_s}: burying" }
+      logger.warn { "#{to_s}: burying" }
       release_def = job.bury(100000) # Set priority till em-jack fixed
       release_def.callback {
         change_state(:done)
@@ -68,11 +73,11 @@ class Juggler
     def delete
       dd = job.delete
       dd.callback do
-        Juggler.logger.debug "#{to_s}: deleted"
+        logger.debug "#{to_s}: deleted"
         change_state(:done)
       end
       dd.errback do
-        Juggler.logger.debug "#{to_s}: delete operation failed"
+        logger.debug "#{to_s}: delete operation failed"
         change_state(:done)
       end
     end
@@ -83,17 +88,17 @@ class Juggler
     def fetch_stats
       dd = EM::DefaultDeferrable.new
 
-      Juggler.logger.debug { "#{to_s}: Fetching stats" }
+      logger.debug { "#{to_s}: Fetching stats" }
 
       stats_def = job.stats
       stats_def.callback do |stats|
         @stats = stats
         @end_time = Time.now + stats["time-left"]
-        Juggler.logger.debug { "#{to_s} stats: #{stats.inspect}"}
+        logger.debug { "#{to_s} stats: #{stats.inspect}"}
         dd.succeed
       end
       stats_def.errback {
-        Juggler.logger.error { "#{to_s}: Fetching stats failed" }
+        logger.error { "#{to_s}: Fetching stats failed" }
         dd.fail
       }
 
@@ -119,16 +124,16 @@ class Juggler
             change_state(:failed)
           elsif e.kind_of?(Exception)
             # Handle exception and schedule for retry
-            Juggler.exception_handler.call(e)
+            @juggler.exception_handler.call(e)
             change_state(:retried)
           else
-            Juggler.logger.debug { "#{to_s}: failed with #{e.inspect}" }
+            logger.debug { "#{to_s}: failed with #{e.inspect}" }
             change_state(:retried)
           end
         }
         @strategy_deferrable = sd
       rescue => e
-        Juggler.exception_handler.call(e)
+        @juggler.exception_handler.call(e)
         change_state(:retried)
       end
     end
@@ -138,7 +143,7 @@ class Juggler
     end
 
     def backoff
-      Juggler.backoff_function.call(self, @stats)
+      @juggler.backoff_function.call(self, @stats)
     end
   end
 end

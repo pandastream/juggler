@@ -5,7 +5,11 @@ require File.expand_path('../../spec_helper', __FILE__)
 # 
 describe Juggler::JobRunner do
   include EM::SpecHelper
-  
+
+  before :each do
+    @juggler = Juggler::JugglerInstance.new
+  end
+
   it "should run job and delete in the success case" do
     em(1) {
       job = mock(:job, {
@@ -19,7 +23,7 @@ describe Juggler::JobRunner do
         df.succeed_later_with(nil, 0.2)
       }
       
-      jobrunner = Juggler::JobRunner.new(job, {}, strategy)
+      jobrunner = Juggler::JobRunner.new(@juggler, job, {}, strategy)
       jobrunner.run
       
       # To check that check_for_timeout doesn't timeout in the sucess case
@@ -52,7 +56,7 @@ describe Juggler::JobRunner do
         raise 'strategy blows up'
       }
       
-      jobrunner = Juggler::JobRunner.new(job, {}, strategy)
+      jobrunner = Juggler::JobRunner.new(@juggler, job, {}, strategy)
       jobrunner.run
       
       jobrunner.bind(:retried) {
@@ -78,7 +82,7 @@ describe Juggler::JobRunner do
       job.should_receive(:release).with({:delay => 1}).
         and_return(stub_deferrable(nil))
 
-      Juggler.exception_handler = lambda { |e|
+      @juggler.exception_handler = lambda { |e|
         e.message.should == "FAIL"
         asserts += 1
       }
@@ -89,7 +93,7 @@ describe Juggler::JobRunner do
         }
       }
 
-      jobrunner = Juggler::JobRunner.new(job, {}, strategy)
+      jobrunner = Juggler::JobRunner.new(@juggler, job, {}, strategy)
       jobrunner.run
 
       jobrunner.bind(:retried) {
@@ -117,7 +121,7 @@ describe Juggler::JobRunner do
         df.fail_later_with(nil)
       }
       
-      jobrunner = Juggler::JobRunner.new(job, {}, strategy)
+      jobrunner = Juggler::JobRunner.new(@juggler, job, {}, strategy)
       jobrunner.run
       
       jobrunner.bind(:retried) {
@@ -144,7 +148,7 @@ describe Juggler::JobRunner do
         df.fail_later_with(:no_retry)
       }
       
-      jobrunner = Juggler::JobRunner.new(job, {}, strategy)
+      jobrunner = Juggler::JobRunner.new(@juggler, job, {}, strategy)
       jobrunner.run
       
       jobrunner.bind(:failed) {
@@ -172,7 +176,7 @@ describe Juggler::JobRunner do
         df.succeed_later_with(nil, 2)
       }
       
-      jobrunner = Juggler::JobRunner.new(job, {}, strategy)
+      jobrunner = Juggler::JobRunner.new(@juggler, job, {}, strategy)
       jobrunner.run
       
       EM.add_timer(0.1) {

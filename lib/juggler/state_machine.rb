@@ -18,7 +18,7 @@ module Juggler::StateMachine
   def change_state(new_state)
     old_state = @_state
     
-    Juggler.logger.debug "#{to_s}: Changing state: #{old_state} to #{new_state}"
+    logger.debug "#{to_s}: Changing state: #{old_state} to #{new_state}"
     
     return nil if old_state == new_state
     
@@ -30,7 +30,7 @@ module Juggler::StateMachine
         run_synchronous_callbacks(old_state, new_state)
       }
       deferable.errback {
-        Juggler.logger.warn "#{to_s}: State change aborted - pre failed"
+        logger.warn "#{to_s}: State change aborted - pre failed"
       }
     else
       run_synchronous_callbacks(old_state, new_state)
