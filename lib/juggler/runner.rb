@@ -1,10 +1,4 @@
 class Juggler
-  # Stopping: This is rather complex. The point of the __STOP__ malarkey it to 
-  # unblock a blocking reserve so that delete and release commands can be 
-  # actioned on the currently running jobs before shutdown. Also a 
-  # Juggler.shutdown_grace_timeout period is availble for jobs to complete before the 
-  # eventmachine is stopped
-  # 
   class Runner
     def initialize(juggler, method, concurrency, strategy)
       @juggler = juggler
@@ -35,9 +29,9 @@ class Juggler
         @reserved = false
 
         begin
-          params = Marshal.load(job.body)
+          params = Juggler.serializer.load(job.body)
         rescue => e
-          handle_exception(e, "#{to_s}: Exception unmarshaling #{@queue} job")
+          handle_exception(e, "#{to_s}: Exception unserializing #{@queue} job")
           connection.delete(job)
           next
         end
@@ -97,10 +91,14 @@ class Juggler
       connection
     end
 
+    # Stopping a runner causes it to stop reserving any new jobs and to cancel
+    # the current blocking reserve
     def stop
       @on = false
 
-      # See class documentation on stopping
+      # This is rather complex. The point of the __STOP__ malarkey it to
+      # unblock a blocking reserve so that delete and release commands can be
+      # actioned on the currently running jobs before shutdown.
       if @reserved
         @juggler.throw(@queue, "__STOP__")
       end
@@ -110,6 +108,12 @@ class Juggler
       @running.size > 0
     end
     
+    # The number of jobs currently running.
+    # This will be between 0 and @concurrency.
+    def running_jobs
+      @running.size
+    end
+
     def to_s
       "Tube #{@queue}"
     end
@@ -130,6 +134,9 @@ class Juggler
         c.on_connect {
           c.watch(@queue)
           reserve_if_necessary
+        }
+        c.on_disconnect {
+          Juggler.send(:disconnected)
         }
         c
       end

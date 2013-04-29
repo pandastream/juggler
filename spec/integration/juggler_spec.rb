@@ -9,13 +9,12 @@ describe "@juggler" do
 
     # Start clean beanstalk instance for each test
     @juggler.server = "beanstalk://localhost:10001"
-    system "beanstalkd -p 10001 &"
+    @beanstalkd_pid = spawn "beanstalkd -p 10001"
     sleep 0.1
   end
   
   after :each do
-    # TODO: Use pid
-    system "killall beanstalkd"
+    system "kill #{@beanstalkd_pid}"
   end
   
   it "should successfully excecute one job" do
