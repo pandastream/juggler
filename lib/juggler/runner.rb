@@ -33,11 +33,13 @@ class Juggler
         rescue => e
           handle_exception(e, "#{to_s}: Exception unserializing #{@queue} job")
           connection.delete(job)
+          reserve_if_necessary
           next
         end
 
         if params == "__STOP__"
           connection.delete(job)
+          reserve_if_necessary
           next
         end
 
