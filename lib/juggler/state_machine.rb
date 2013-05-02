@@ -3,25 +3,25 @@
 # Callbacks are defined for before :exit, :pre enter and after :enter
 # Asynchrous callbacks are not properly supported yet - only :pre must return
 # a deferrable which will continue the callback chain on complete
-# 
+#
 # state :foobar, :enter => 'get_http'
-# 
+#
 module Juggler::StateMachine
   def self.included(klass)
     klass.extend(ClassMethods)
   end
-  
+
   def state
     @_state
   end
-  
+
   def change_state(new_state)
     old_state = @_state
-    
+
     logger.debug "#{to_s}: Changing state: #{old_state} to #{new_state}"
-    
+
     return nil if old_state == new_state
-    
+
     raise "#{to_s}: Invalid state #{new_state}" unless self.class.states[new_state]
 
     if method = self.class.states[new_state][:pre]
@@ -67,12 +67,12 @@ module Juggler::StateMachine
       callbacks.each { |c| c.call(self) }
     end
   end
-  
+
   module ClassMethods
     def states
       @_states
     end
-  
+
     def state(name, callbacks = {})
       @_states ||= {}
       @_states[name] = callbacks

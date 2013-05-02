@@ -10,8 +10,8 @@ class Juggler
       @reserved = false
     end
 
-    # We potentially need to issue a new reserve call after a job is reserved 
-    # (if we're not at the concurrency limit), and after a job completes 
+    # We potentially need to issue a new reserve call after a job is reserved
+    # (if we're not at the concurrency limit), and after a job completes
     # (unless we're already reserving)
     def reserve_if_necessary
       if @on && @connection.connected? && !@reserved && @running.size < @concurrency
@@ -22,9 +22,9 @@ class Juggler
 
     def reserve
       @reserved = true
-      
+
       reserve_call = connection.reserve
-      
+
       reserve_call.callback do |job|
         @reserved = false
 
@@ -35,14 +35,14 @@ class Juggler
           connection.delete(job)
           next
         end
-        
+
         if params == "__STOP__"
           connection.delete(job)
           next
         end
-        
+
         job_runner = JobRunner.new(@juggler, job, params, @strategy)
-        
+
         @running << job_runner
 
         @juggler.logger.debug {
@@ -62,13 +62,13 @@ class Juggler
 
         job_runner.run
       end
-      
+
       reserve_call.errback do |error|
         @reserved = false
-        
+
         if error == :deadline_soon
-          # This doesn't necessarily mean that a job has taken too long, it is 
-          # quite likely that the blocking reserve is just stopping jobs from 
+          # This doesn't necessarily mean that a job has taken too long, it is
+          # quite likely that the blocking reserve is just stopping jobs from
           # being deleted
           @juggler.logger.debug "#{to_s}: Reserve terminated (deadline_soon)"
 
@@ -103,11 +103,11 @@ class Juggler
         @juggler.throw(@queue, "__STOP__")
       end
     end
-    
+
     def running?
       @running.size > 0
     end
-    
+
     # The number of jobs currently running.
     # This will be between 0 and @concurrency.
     def running_jobs
@@ -141,19 +141,19 @@ class Juggler
         c
       end
     end
-    
-    # Iterates over all jobs reserved on this connection and fails them if 
-    # they're within 1s of their timeout. Returns a callback which completes 
+
+    # Iterates over all jobs reserved on this connection and fails them if
+    # they're within 1s of their timeout. Returns a callback which completes
     # when all jobs have been checked
     def check_all_reserved_jobs
       dd = EM::DefaultDeferrable.new
-      
+
       @running.each do |job_runner|
         job_runner.check_for_timeout
       end
-      
+
       # Wait 1s before reserving or we'll just get DEALINE_SOON again
-      # "If the client issues a reserve command during the safety margin, 
+      # "If the client issues a reserve command during the safety margin,
       # <snip>, the server will respond with: DEADLINE_SOON"
       #
       # In theory, one should not need to do this since reserve will already
@@ -161,7 +161,7 @@ class Juggler
       EM::Timer.new(1) do
         dd.succeed
       end
-      
+
       dd
     end
   end

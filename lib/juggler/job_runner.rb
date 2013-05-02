@@ -3,7 +3,7 @@ require 'juggler/state_machine'
 class Juggler
   class JobRunner
     include StateMachine
-    
+
     state :new
     state :running, :pre => :fetch_stats, :enter => :run_strategy
     state :succeeded, :enter => :delete
@@ -11,9 +11,9 @@ class Juggler
     state :failed, :enter => :delete
     state :retried, :enter => :backoff
     state :done
-    
+
     attr_reader :job
-    
+
     def initialize(juggler, job, params, strategy)
       @juggler = juggler
       @job = job
@@ -32,7 +32,7 @@ class Juggler
     def run
       change_state(:running)
     end
-    
+
     def check_for_timeout
       if state == :running
         if (time_left = @end_time - Time.now) < 1
@@ -41,11 +41,11 @@ class Juggler
         end
       end
     end
-    
+
     def to_s
       "Job #{@job.jobid}"
     end
-    
+
     def release(delay = 0)
       logger.debug { "#{to_s}: releasing" }
       release_def = job.release(:delay => delay)
@@ -83,7 +83,7 @@ class Juggler
     end
 
     private
-    
+
     # Retrives job stats from beanstalkd
     def fetch_stats
       dd = EM::DefaultDeferrable.new
@@ -106,7 +106,7 @@ class Juggler
     end
 
     # Wraps running the actual job.
-    # Returns a deferrable that fails if there is an exception calling the 
+    # Returns a deferrable that fails if there is an exception calling the
     # strategy or if the strategy triggers errback
     def run_strategy
       begin
@@ -137,7 +137,7 @@ class Juggler
         change_state(:retried)
       end
     end
-    
+
     def timeout_strategy
       @strategy_deferrable.fail(:timed_out)
     end

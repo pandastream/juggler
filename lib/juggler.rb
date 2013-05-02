@@ -62,10 +62,10 @@ class Juggler
       connection.put(@serializer.dump(params), options)
     end
 
-    # Strategy block: should return a deferrable object (so that juggler can 
-    # apply callbacks and errbacks). You should note that this deferrable may 
-    # be failed by juggler if the job timeout is exceeded, and therefore you 
-    # are responsible for cleaning up your state (for example cancelling any 
+    # Strategy block: should return a deferrable object (so that juggler can
+    # apply callbacks and errbacks). You should note that this deferrable may
+    # be failed by juggler if the job timeout is exceeded, and therefore you
+    # are responsible for cleaning up your state (for example cancelling any
     # timers which you have created)
     def juggle(method, concurrency = 1, &strategy)
       Runner.new(self, method, concurrency, strategy).tap { |r| r.run }
