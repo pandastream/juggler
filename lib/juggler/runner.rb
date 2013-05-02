@@ -29,7 +29,7 @@ class Juggler
         @reserved = false
 
         begin
-          params = Juggler.serializer.load(job.body)
+          params = @juggler.serializer.load(job.body)
         rescue => e
           handle_exception(e, "#{to_s}: Exception unserializing #{@queue} job")
           connection.delete(job)
@@ -136,7 +136,7 @@ class Juggler
           reserve_if_necessary
         }
         c.on_disconnect {
-          Juggler.send(:disconnected)
+          @juggler.send(:disconnected)
         }
         c
       end
