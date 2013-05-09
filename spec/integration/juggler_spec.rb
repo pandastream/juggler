@@ -77,14 +77,20 @@ describe "@juggler" do
 
   it "should be possible to stop a juggler instance that is reserving and is also running a job" do
     em(2) {
+      jobs_started = 0
+      jobs_completed = 0
       @juggler.juggle(:some_task, 2) { |df, params|
-        EM.add_timer(0.1) {
+        jobs_started += 1
+        EM.add_timer(0.2) {
+          jobs_completed += 1
           df.succeed
         }
       }
       @juggler.throw(:some_task, {})
       EM.add_timer(0.1) {
         @juggler.stop.callback {
+          jobs_started.should == 1
+          jobs_completed.should == 1
           done
         }
       }
@@ -93,14 +99,20 @@ describe "@juggler" do
 
   it "should be possible to stop a juggler instance that is not reserving" do
     em(2) {
+      jobs_started = 0
+      jobs_completed = 0
       @juggler.juggle(:some_task, 1) { |df, params|
-        EM.add_timer(0.1) {
+        jobs_started += 1
+        EM.add_timer(0.2) {
+          jobs_completed += 1
           df.succeed
         }
       }
       @juggler.throw(:some_task, {})
       EM.add_timer(0.1) {
         @juggler.stop.callback {
+          jobs_started.should == 1
+          jobs_completed.should == 1
           done
         }
       }
@@ -109,16 +121,24 @@ describe "@juggler" do
 
   it "should be possible to stop a juggler instance that receives a job after being stopped" do
     em(2) {
+      jobs_started = 0
+      jobs_completed = 0
       @juggler.juggle(:some_task, 2) { |df, params|
-        EM.add_timer(0.1) {
+        jobs_started += 1
+        EM.add_timer(0.2) {
+          jobs_completed += 1
           df.succeed
         }
       }
       @juggler.throw(:some_task, {})
       EM.add_timer(0.1) {
-        @juggler.throw(:some_task, {})
         @juggler.stop.callback {
+          jobs_started.should == 1
+          jobs_completed.should == 1
           done
+        }
+        EM.next_tick {
+          @juggler.throw(:some_task, {})
         }
       }
     }
