@@ -50,4 +50,77 @@ describe "@juggler" do
       }
     end
   end
+
+  it "should be possible to stop a juggler instance immediately after creating a runner" do
+    em(2) {
+      @juggler.juggle(:some_task, 1) { |df, params|
+        fail
+      }
+      @juggler.stop.callback {
+        done
+      }
+    }
+  end
+
+  it "should be possible to stop a juggler instance that is idle" do
+    em(2) {
+      @juggler.juggle(:some_task, 1) { |df, params|
+        fail
+      }
+      EM.add_timer(0.1) {
+        @juggler.stop.callback {
+          done
+        }
+      }
+    }
+  end
+
+  it "should be possible to stop a juggler instance that is reserving and is also running a job" do
+    em(2) {
+      @juggler.juggle(:some_task, 2) { |df, params|
+        EM.add_timer(0.1) {
+          df.succeed
+        }
+      }
+      @juggler.throw(:some_task, {})
+      EM.add_timer(0.1) {
+        @juggler.stop.callback {
+          done
+        }
+      }
+    }
+  end
+
+  it "should be possible to stop a juggler instance that is not reserving" do
+    em(2) {
+      @juggler.juggle(:some_task, 1) { |df, params|
+        EM.add_timer(0.1) {
+          df.succeed
+        }
+      }
+      @juggler.throw(:some_task, {})
+      EM.add_timer(0.1) {
+        @juggler.stop.callback {
+          done
+        }
+      }
+    }
+  end
+
+  it "should be possible to stop a juggler instance that receives a job after being stopped" do
+    em(2) {
+      @juggler.juggle(:some_task, 2) { |df, params|
+        EM.add_timer(0.1) {
+          df.succeed
+        }
+      }
+      @juggler.throw(:some_task, {})
+      EM.add_timer(0.1) {
+        @juggler.throw(:some_task, {})
+        @juggler.stop.callback {
+          done
+        }
+      }
+    }
+  end
 end

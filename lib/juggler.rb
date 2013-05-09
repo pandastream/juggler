@@ -5,7 +5,6 @@ require 'uri'
 class Juggler
   class JugglerInstance
     attr_writer :logger
-    attr_writer :shutdown_grace_timeout
     attr_accessor :exception_handler
     attr_accessor :backoff_function
     attr_accessor :serializer
@@ -40,11 +39,6 @@ class Juggler
       @server = URI(uri)
     end
 
-    # By default after receiving QUIT juggler will wait up to 2s for running
-    # jobs to complete before killing them
-    def shutdown_grace_timeout
-      @shutdown_grace_timeout || 2
-    end
 
     def logger
       @logger ||= begin
@@ -72,11 +66,30 @@ class Juggler
     end
 
     def stop
-      @runners.each { |r| r.stop }
-    end
+      df1 = EM::DefaultDeferrable.new
+      df2 = EM::DefaultDeferrable.new
+      n = @runners.size
 
-    def running?
-      @runners.any? { |r| r.running? }
+      @runners.each { |r|
+        r.stop.callback {
+          n -= 1
+          df1.succeed if n == 0
+        }
+      }
+
+      if @connection
+        @connection.disconnect.callback {
+          df1.callback {
+            df2.succeed
+          }
+        }
+      else
+        df1.callback {
+          df2.succeed
+        }
+      end
+
+      df2
     end
 
     # Run sync code with Juggler. The code will be run in a thread pool by
@@ -151,8 +164,27 @@ class Juggler
   end
 
   class << self
+    attr_writer :shutdown_grace_timeout
+
     def default
       @default ||= JugglerInstance.new
+    end
+
+    def stop
+      default.stop.callback {
+        default.logger.info "Exited cleanly"
+        EM.stop
+      }
+      EM.add_timer(shutdown_grace_timeout) {
+        default.logger.info "Force exited after #{shutdown_grace_timeout}s with tasks running"
+        EM.stop
+      }
+    end
+
+    # By default after receiving QUIT juggler will wait up to 2s for running
+    # jobs to complete before killing them
+    def shutdown_grace_timeout
+      @shutdown_grace_timeout || 2
     end
 
     def method_missing(method, *args, &blk)

@@ -18,12 +18,16 @@ class Juggler
         @juggler.logger.debug "#{to_s}: Reserving"
         reserve
       end
+
+      if !@on && !@reserved && @running.empty?
+        @stop_df.succeed
+      end
     end
 
     def reserve
       @reserved = true
 
-      reserve_call = connection.reserve
+      reserve_call = connection.reserve(1)
 
       reserve_call.callback do |job|
         @reserved = false
@@ -43,12 +47,18 @@ class Juggler
           next
         end
 
+        if !@on
+          job.release
+          reserve_if_necessary
+          next
+        end
+
         job_runner = JobRunner.new(@juggler, job, params, @strategy)
 
         @running << job_runner
 
         @juggler.logger.debug {
-          "#{to_s}: Excecuting #{@running.size} jobs"
+          "#{to_s}: Executing #{@running.size} jobs"
         }
 
         # We may reserve after job is running (after fetching stats)
@@ -79,6 +89,8 @@ class Juggler
           }
         elsif error == :disconnected
           @juggler.logger.warn "#{to_s}: Reserve terminated (beanstalkd disconnected)"
+        elsif error == :timed_out
+          reserve_if_necessary
         else
           @juggler.logger.error "#{to_s}: Unexpected error: #{error}"
           reserve_if_necessary
@@ -89,25 +101,34 @@ class Juggler
     def run
       @on = true
       @juggler.send(:add_runner, self)
-      # Creates beanstalkd connection - reserve happens on connect
-      connection
+
+      @connection = EMJack::Connection.new({
+        :host => @juggler.server.host,
+        :port => @juggler.server.port,
+      })
+      @connection.on_connect {
+        @connection.watch(@queue)
+        reserve_if_necessary
+      }
+      @connection.on_disconnect {
+        @juggler.send(:disconnected)
+      }
     end
 
-    # Stopping a runner causes it to stop reserving any new jobs and to cancel
-    # the current blocking reserve
+    # Stopping a runner causes it to stop reserving any new jobs and closes the 
+    # connection.
     def stop
       @on = false
 
-      # This is rather complex. The point of the __STOP__ malarkey it to
-      # unblock a blocking reserve so that delete and release commands can be
-      # actioned on the currently running jobs before shutdown.
-      if @reserved
-        @juggler.throw(@queue, "__STOP__")
-      end
-    end
+      df = EM::DefaultDeferrable.new
+      @stop_df = EM::DefaultDeferrable.new
 
-    def running?
-      @running.size > 0
+      @stop_df.callback {
+        connection.disconnect.callback {
+          df.succeed
+        }
+      }
+      df
     end
 
     # The number of jobs currently running.
@@ -128,20 +149,7 @@ class Juggler
     end
 
     def connection
-      @connection ||= begin
-        c = EMJack::Connection.new({
-          :host => @juggler.server.host,
-          :port => @juggler.server.port,
-        })
-        c.on_connect {
-          c.watch(@queue)
-          reserve_if_necessary
-        }
-        c.on_disconnect {
-          @juggler.send(:disconnected)
-        }
-        c
-      end
+      @connection
     end
 
     # Iterates over all jobs reserved on this connection and fails them if
