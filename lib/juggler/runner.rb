@@ -15,7 +15,6 @@ class Juggler
     # (unless we're already reserving)
     def reserve_if_necessary
       if @on && @connection.connected? && !@reserved && @running.size < @concurrency
-        @juggler.logger.debug "#{to_s}: Reserving"
         reserve
       end
 
